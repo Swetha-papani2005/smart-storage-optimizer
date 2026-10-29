@@ -1,0 +1,32 @@
+# C++ Build Artifacts
+build/
+bin/
+obj/
+*.exe
+*.o
+*.obj
+*.pdb
+*.ilk
+*.idb
+
+# Test artifacts & generated reports
+test-sandbox/
+quarantine/
+storage_audit_report.json
+cleanup_duplicates.ps1
+cleanup_duplicates.bat
+
+# Node / Web dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.firebase/
+
+# IDE / OS files
+.vscode/
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

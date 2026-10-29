@@ -1,0 +1,15 @@
+{
+  "name": "smart-storage-optimizer-dashboard",
+  "version": "1.0.0",
+  "description": "Web dashboard and in-browser SHA-256 duplicate file detection system connected to Firebase",
+  "scripts": {
+    "start": "npx serve public -p 5000",
+    "deploy": "firebase deploy --only hosting"
+  },
+  "dependencies": {
+    "firebase": "^9.23.0"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Storage Optimizer & Duplicate File Detection</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge-tag">C++17 Engine &bull; SHA-256 Hasher &bull; Firebase Cloud</span>
+      <h1>Smart Storage Optimizer</h1>
+      <p class="subtitle">High-performance duplicate file detection, storage waste analytics, and intelligent cleanup recommendations powered by C++ and Firebase.</p>
+    </header>
+
+    <!-- Drop Zone & Action Bar -->
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-icon">⚡</div>
+      <div class="drop-text">Drag & Drop Folders or Files Here to Scan</div>
+      <div class="drop-subtext">Runs 3-stage SHA-256 detection right in your browser, or import a C++ scan report JSON</div>
+      
+      <div class="drop-inputs">
+        <label class="btn btn-primary">
+          📂 Scan Local Folder
+          <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
+        </label>
+        <label class="btn btn-secondary">
+          📄 Select Files
+          <input type="file" id="filesInput" multiple class="hidden">
+        </label>
+        <label class="btn btn-emerald">
+          📥 Import C++ JSON Report
+          <input type="file" id="jsonInput" accept=".json" class="hidden">
+        </label>
+      </div>
+
+      <!-- Live progress status -->
+      <div class="progress-container" id="progressBox">
+        <div class="progress-text" id="progressText">Initializing scan pipeline...</div>
+      </div>
+    </div>
+
+    <!-- Active Report Section -->
+    <div id="reportSection">
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Files Scanned</div>
+          <div class="stat-value" id="statTotalFiles">0</div>
+          <div class="stat-sub" id="statTotalScanned">0 Bytes</div>
+        </div>
+        <div class="stat-card amber">
+          <div class="stat-label">Duplicate Files Found</div>
+          <div class="stat-value" id="statDuplicateFiles">0</div>
+          <div class="stat-sub" id="statClusters">0 clusters</div>
+        </div>
+        <div class="stat-card wasted">
+          <div class="stat-label">Recoverable Waste</div>
+          <div class="stat-value" id="statWastedSpace">0 Bytes</div>
+          <div class="stat-sub">Storage to be reclaimed</div>
+        </div>
+        <div class="stat-card emerald">
+          <div class="stat-label">Waste Percentage</div>
+          <div class="stat-value" id="statWastePercent">0.0%</div>
+          <div class="stat-sub">Redundancy ratio</div>
+        </div>
+      </div>
+
+      <!-- Interactive Strategy & Action Controls -->
+      <div class="strategy-controls">
+        <label for="strategySelect" style="font-weight:600; font-size:0.875rem;">Cleanup Strategy:</label>
+        <select id="strategySelect">
+          <option value="KEEP_OLDEST" selected>Keep Oldest (Preserve Original File)</option>
+          <option value="KEEP_NEWEST">Keep Newest (Retain Latest Modified)</option>
+          <option value="KEEP_SHORTEST_PATH">Keep Shortest Path (Cleanest Folder Hierarchy)</option>
+        </select>
+
+        <div style="margin-left: auto; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="exportScriptBtn">💾 Download Cleanup Script (.ps1)</button>
+          <button class="btn btn-secondary" id="exportJsonBtn">📊 Export JSON</button>
+          <button class="btn btn-emerald" id="syncFirebaseBtn">☁️ Sync to Firebase</button>
+        </div>
+      </div>
+
+      <!-- Two-column dashboard: Category Waste & Duplicate Clusters -->
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Left: Waste by Category -->
+        <div class="card">
+          <div class="card-title">
+            <span>Storage Waste by Category</span>
+          </div>
+          <div id="categoryBars">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Right: Duplicate Clusters Explorer -->
+        <div class="card">
+          <div class="card-title">
+            <span>Duplicate File Clusters (SHA-256)</span>
+          </div>
+          <div id="clustersList">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Cloud History Card -->
+      <div class="card">
+        <div class="card-title">
+          <span>Firebase Cloud Scan History</span>
+        </div>
+        <div id="historyList">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Smart Storage Optimization and Duplicate File Detection System &bull; C++17 Engine &amp; Firebase Backend</p>
+    </footer>
+  </div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>

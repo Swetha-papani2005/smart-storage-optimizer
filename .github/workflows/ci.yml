@@ -1,0 +1,77 @@
+name: Build, Test & Deploy
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-test:
+    name: Build & Test C++ Core Engine
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup MinGW GCC
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x64
+
+      - name: Compile C++ Engine
+        working-directory: cpp-engine
+        run: |
+          g++ -std=c++17 -O2 -static -static-libgcc -static-libstdc++ -Iinclude src/sha256.cpp src/metadata_collector.cpp src/duplicate_detector.cpp src/waste_analyzer.cpp src/reporter.cpp src/main.cpp -o storage_optimizer.exe
+
+      - name: Generate Synthetic Test Data
+        run: |
+          powershell -ExecutionPolicy Bypass -File scripts/generate_test_data.ps1
+
+      - name: Run Test Suite
+        working-directory: cpp-engine
+        run: |
+          .\storage_optimizer.exe -s ../test-sandbox -j ../test-sandbox/report.json -g ../test-sandbox/clean.ps1
+
+      - name: Verify Audit Report Generated
+        shell: pwsh
+        run: |
+          if (-not (Test-Path test-sandbox/report.json)) {
+            Write-Error "Report file was not generated!"
+            exit 1
+          }
+          Write-Host "C++ Core Engine build and duplicate detection test passed successfully!"
+
+  deploy-pages:
+    name: Deploy Live Web Dashboard to GitHub Pages
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'web-dashboard/public'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
