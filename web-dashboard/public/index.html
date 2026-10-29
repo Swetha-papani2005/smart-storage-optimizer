@@ -12,116 +12,160 @@
 <body>
   <div class="container">
     <header>
-      <span class="badge-tag">C++17 Engine &bull; SHA-256 Hasher &bull; Firebase Cloud</span>
+      <span class="badge-tag">C++17 Engine &bull; SHA-256 Hasher &bull; Smart Trash &bull; Firebase Cloud</span>
       <h1>Smart Storage Optimizer</h1>
-      <p class="subtitle">High-performance duplicate file detection, storage waste analytics, and intelligent cleanup recommendations powered by C++ and Firebase.</p>
+      <p class="subtitle">High-performance duplicate detection, storage analytics, and timed smart trash with 1-click recovery.</p>
     </header>
 
-    <!-- Drop Zone & Action Bar -->
-    <div class="drop-zone" id="dropZone">
-      <div class="drop-icon">⚡</div>
-      <div class="drop-text">Drag & Drop Folders or Files Here to Scan</div>
-      <div class="drop-subtext">Runs 3-stage SHA-256 detection right in your browser, or import a C++ scan report JSON</div>
-      
-      <div class="drop-inputs">
-        <label class="btn btn-primary">
-          📂 Scan Local Folder
-          <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
-        </label>
-        <label class="btn btn-secondary">
-          📄 Select Files
-          <input type="file" id="filesInput" multiple class="hidden">
-        </label>
-        <label class="btn btn-emerald">
-          📥 Import C++ JSON Report
-          <input type="file" id="jsonInput" accept=".json" class="hidden">
-        </label>
+    <!-- Top Navigation Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" id="tabScannerBtn">⚡ Duplicates &amp; Storage Analytics</button>
+      <button class="tab-btn" id="tabTrashBtn">
+        🗑️ Smart Trash &amp; Recovery Vault <span class="badge-count" id="trashCountBadge">0</span>
+      </button>
+    </div>
+
+    <!-- VIEW 1: Scanner & Analytics -->
+    <div id="viewScanner">
+      <!-- Drop Zone & Action Bar -->
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon">⚡</div>
+        <div class="drop-text">Drag &amp; Drop Folders or Files Here to Scan</div>
+        <div class="drop-subtext">Runs 3-stage SHA-256 detection right in your browser, or import a C++ scan report JSON</div>
+        
+        <div class="drop-inputs">
+          <label class="btn btn-primary">
+            📂 Scan Local Folder
+            <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
+          </label>
+          <label class="btn btn-secondary">
+            📄 Select Files
+            <input type="file" id="filesInput" multiple class="hidden">
+          </label>
+          <label class="btn btn-emerald">
+            📥 Import C++ JSON Report
+            <input type="file" id="jsonInput" accept=".json" class="hidden">
+          </label>
+        </div>
+
+        <!-- Live progress status -->
+        <div class="progress-container" id="progressBox">
+          <div class="progress-text" id="progressText">Initializing scan pipeline...</div>
+        </div>
       </div>
 
-      <!-- Live progress status -->
-      <div class="progress-container" id="progressBox">
-        <div class="progress-text" id="progressText">Initializing scan pipeline...</div>
+      <!-- Active Report Section -->
+      <div id="reportSection">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Files Scanned</div>
+            <div class="stat-value" id="statTotalFiles">0</div>
+            <div class="stat-sub" id="statTotalScanned">0 Bytes</div>
+          </div>
+          <div class="stat-card amber">
+            <div class="stat-label">Duplicate Files Found</div>
+            <div class="stat-value" id="statDuplicateFiles">0</div>
+            <div class="stat-sub" id="statClusters">0 clusters</div>
+          </div>
+          <div class="stat-card wasted">
+            <div class="stat-label">Recoverable Waste</div>
+            <div class="stat-value" id="statWastedSpace">0 Bytes</div>
+            <div class="stat-sub">Storage to be reclaimed</div>
+          </div>
+          <div class="stat-card emerald">
+            <div class="stat-label">Waste Percentage</div>
+            <div class="stat-value" id="statWastePercent">0.0%</div>
+            <div class="stat-sub">Redundancy ratio</div>
+          </div>
+        </div>
+
+        <!-- Interactive Strategy & Action Controls -->
+        <div class="strategy-controls">
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <label for="strategySelect" style="font-weight:600; font-size:0.875rem;">Keep Rule:</label>
+            <select id="strategySelect">
+              <option value="KEEP_OLDEST" selected>Keep Oldest (Original File)</option>
+              <option value="KEEP_NEWEST">Keep Newest (Latest Revision)</option>
+              <option value="KEEP_SHORTEST_PATH">Keep Shortest Path (Clean Hierarchy)</option>
+            </select>
+
+            <label for="trashRetentionSelect" style="font-weight:600; font-size:0.875rem; margin-left: 0.5rem;">Trash Timer:</label>
+            <select id="trashRetentionSelect" style="border-color: var(--accent-amber);">
+              <option value="1month" selected>⏳ 1 Month (30 Days Auto-Purge)</option>
+              <option value="1week">⏳ 1 Week (7 Days Auto-Purge)</option>
+              <option value="1day">⏳ 1 Day (24 Hours Auto-Purge)</option>
+            </select>
+          </div>
+
+          <div style="margin-left: auto; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-rose" id="trashAllBtn">🗑️ Move Duplicates to Trash</button>
+            <button class="btn btn-primary" id="exportScriptBtn">💾 Cleanup Script (.ps1)</button>
+            <button class="btn btn-secondary" id="exportJsonBtn">📊 Export JSON</button>
+            <button class="btn btn-emerald" id="syncFirebaseBtn">☁️ Sync Firebase</button>
+          </div>
+        </div>
+
+        <!-- Two-column dashboard: Category Waste & Duplicate Clusters -->
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; margin-bottom: 2rem;">
+          <!-- Left: Waste by Category -->
+          <div class="card">
+            <div class="card-title">
+              <span>Storage Waste by Category</span>
+            </div>
+            <div id="categoryBars">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Right: Duplicate Clusters Explorer -->
+          <div class="card">
+            <div class="card-title">
+              <span>Duplicate File Clusters (SHA-256)</span>
+            </div>
+            <div id="clustersList">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Cloud History Card -->
+        <div class="card">
+          <div class="card-title">
+            <span>Firebase Cloud Scan History</span>
+          </div>
+          <div id="historyList">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Active Report Section -->
-    <div id="reportSection">
-      <!-- Stats Grid -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">Total Files Scanned</div>
-          <div class="stat-value" id="statTotalFiles">0</div>
-          <div class="stat-sub" id="statTotalScanned">0 Bytes</div>
-        </div>
-        <div class="stat-card amber">
-          <div class="stat-label">Duplicate Files Found</div>
-          <div class="stat-value" id="statDuplicateFiles">0</div>
-          <div class="stat-sub" id="statClusters">0 clusters</div>
-        </div>
-        <div class="stat-card wasted">
-          <div class="stat-label">Recoverable Waste</div>
-          <div class="stat-value" id="statWastedSpace">0 Bytes</div>
-          <div class="stat-sub">Storage to be reclaimed</div>
-        </div>
-        <div class="stat-card emerald">
-          <div class="stat-label">Waste Percentage</div>
-          <div class="stat-value" id="statWastePercent">0.0%</div>
-          <div class="stat-sub">Redundancy ratio</div>
-        </div>
-      </div>
-
-      <!-- Interactive Strategy & Action Controls -->
-      <div class="strategy-controls">
-        <label for="strategySelect" style="font-weight:600; font-size:0.875rem;">Cleanup Strategy:</label>
-        <select id="strategySelect">
-          <option value="KEEP_OLDEST" selected>Keep Oldest (Preserve Original File)</option>
-          <option value="KEEP_NEWEST">Keep Newest (Retain Latest Modified)</option>
-          <option value="KEEP_SHORTEST_PATH">Keep Shortest Path (Cleanest Folder Hierarchy)</option>
-        </select>
-
-        <div style="margin-left: auto; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <button class="btn btn-primary" id="exportScriptBtn">💾 Download Cleanup Script (.ps1)</button>
-          <button class="btn btn-secondary" id="exportJsonBtn">📊 Export JSON</button>
-          <button class="btn btn-emerald" id="syncFirebaseBtn">☁️ Sync to Firebase</button>
-        </div>
-      </div>
-
-      <!-- Two-column dashboard: Category Waste & Duplicate Clusters -->
-      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; margin-bottom: 2rem;">
-        <!-- Left: Waste by Category -->
-        <div class="card">
-          <div class="card-title">
-            <span>Storage Waste by Category</span>
-          </div>
-          <div id="categoryBars">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <!-- Right: Duplicate Clusters Explorer -->
-        <div class="card">
-          <div class="card-title">
-            <span>Duplicate File Clusters (SHA-256)</span>
-          </div>
-          <div id="clustersList">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-      </div>
-
-      <!-- Cloud History Card -->
+    <!-- VIEW 2: Smart Trash & Recovery Vault -->
+    <div id="viewTrash" class="hidden">
       <div class="card">
         <div class="card-title">
-          <span>Firebase Cloud Scan History</span>
+          <div>
+            <span>🗑️ Smart Trash &amp; Recovery Vault</span>
+            <p style="font-size: 0.85rem; font-weight: normal; color: var(--text-muted); margin-top: 0.25rem;">
+              Deleted files stay safe here until their timer expires. Restore any file with 1-click back to its exact original directory.
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary" id="purgeExpiredBtn">🧹 Purge Expired Now</button>
+            <button class="btn btn-rose" id="emptyTrashBtn">⚠️ Empty Entire Trash</button>
+          </div>
         </div>
-        <div id="historyList">
+
+        <!-- Trashed Items Container -->
+        <div id="trashItemsList">
           <!-- Dynamically populated -->
         </div>
       </div>
     </div>
 
     <footer>
-      <p>Smart Storage Optimization and Duplicate File Detection System &bull; C++17 Engine &amp; Firebase Backend</p>
+      <p>Smart Storage Optimization and Duplicate File Detection System &bull; C++17 Engine &amp; Smart Trash</p>
     </footer>
   </div>
 

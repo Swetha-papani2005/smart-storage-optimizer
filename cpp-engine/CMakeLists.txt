@@ -18,6 +18,7 @@ set(SOURCES
     src/duplicate_detector.cpp
     src/waste_analyzer.cpp
     src/reporter.cpp
+    src/trash_manager.cpp
     src/main.cpp
 )
 

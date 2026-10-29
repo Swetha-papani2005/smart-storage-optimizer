@@ -13,12 +13,35 @@ class App {
     await this.firebase.init();
     this.bindEvents();
     this.renderHistory();
+    this.loadTrashList();
 
     // Load sample report initially if available
     this.loadSampleData();
   }
 
   bindEvents() {
+    // Tabs
+    const tabScannerBtn = document.getElementById('tabScannerBtn');
+    const tabTrashBtn = document.getElementById('tabTrashBtn');
+    const viewScanner = document.getElementById('viewScanner');
+    const viewTrash = document.getElementById('viewTrash');
+
+    tabScannerBtn.addEventListener('click', () => {
+      tabScannerBtn.classList.add('active');
+      tabTrashBtn.classList.remove('active');
+      viewScanner.classList.remove('hidden');
+      viewTrash.classList.add('hidden');
+    });
+
+    tabTrashBtn.addEventListener('click', () => {
+      tabTrashBtn.classList.add('active');
+      tabScannerBtn.classList.remove('active');
+      viewTrash.classList.remove('hidden');
+      viewScanner.classList.add('hidden');
+      this.loadTrashList();
+    });
+
+    // Scanner Inputs
     const dropZone = document.getElementById('dropZone');
     const folderInput = document.getElementById('folderInput');
     const filesInput = document.getElementById('filesInput');
@@ -27,6 +50,9 @@ class App {
     const exportScriptBtn = document.getElementById('exportScriptBtn');
     const exportJsonBtn = document.getElementById('exportJsonBtn');
     const syncFirebaseBtn = document.getElementById('syncFirebaseBtn');
+    const trashAllBtn = document.getElementById('trashAllBtn');
+    const purgeExpiredBtn = document.getElementById('purgeExpiredBtn');
+    const emptyTrashBtn = document.getElementById('emptyTrashBtn');
 
     // Drag and drop
     dropZone.addEventListener('dragover', (e) => {
@@ -82,6 +108,9 @@ class App {
     exportScriptBtn.addEventListener('click', () => this.downloadCleanupScript());
     exportJsonBtn.addEventListener('click', () => this.downloadJsonReport());
     syncFirebaseBtn.addEventListener('click', () => this.saveToFirebase());
+    trashAllBtn.addEventListener('click', () => this.trashAllRecommended());
+    purgeExpiredBtn.addEventListener('click', () => this.purgeExpiredTrash());
+    emptyTrashBtn.addEventListener('click', () => this.emptyAllTrash());
   }
 
   async processFiles(fileList) {
@@ -216,10 +245,15 @@ class App {
         filesHtml += `
           <div class="file-row">
             <div style="display:flex; align-items:center;">
-              <span class="tag-remove">REMOVE COPY</span>
+              <span class="tag-remove">DUPLICATE</span>
               <span class="file-path">${dup.full_path}</span>
             </div>
-            <span class="file-time">${dup.formatted_time || ''}</span>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <span class="file-time">${dup.formatted_time || ''}</span>
+              <button class="btn btn-rose btn-trash-single" data-path="${dup.full_path}" style="padding:0.2rem 0.5rem; font-size:0.75rem;">
+                🗑️ Move to Trash
+              </button>
+            </div>
           </div>
         `;
       });
@@ -238,11 +272,220 @@ class App {
       `;
       container.appendChild(box);
     });
+
+    // Bind individual trash buttons
+    container.querySelectorAll('.btn-trash-single').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const filePath = e.target.getAttribute('data-path');
+        const retention = document.getElementById('trashRetentionSelect').value;
+        await this.trashFiles([filePath], retention);
+      });
+    });
   }
 
+  // ---------------------------------------------------------------------------
+  // SMART TRASH & RETENTION METHODS
+  // ---------------------------------------------------------------------------
+  async trashAllRecommended() {
+    if (!this.currentReport || !this.currentReport.recommendations) {
+      alert("No active scan report to clean.");
+      return;
+    }
+
+    const paths = [];
+    for (const rec of this.currentReport.recommendations) {
+      for (const dup of rec.duplicates_to_delete) {
+        if (dup.full_path) paths.push(dup.full_path);
+      }
+    }
+
+    if (paths.length === 0) {
+      alert("No duplicate files marked for removal.");
+      return;
+    }
+
+    const retention = document.getElementById('trashRetentionSelect').value;
+    const retentionName = retention === '1day' ? '1 Day' : retention === '1week' ? '1 Week' : '1 Month';
+
+    if (!confirm(`Are you sure you want to move ${paths.length} duplicate files to Smart Trash?\n\nThey will be safely kept for ${retentionName} during which you can restore them at any time.`)) {
+      return;
+    }
+
+    await this.trashFiles(paths, retention);
+  }
+
+  async trashFiles(filePaths, retention) {
+    try {
+      const res = await fetch('/api/trash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filePaths, retention })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`Success! Moved ${data.moved_count} file(s) to Smart Trash.\nRetention Timer: ${data.retention} before auto-purge.`);
+        
+        // Remove trashed paths from current report view
+        const trashedSet = new Set(filePaths);
+        if (this.currentReport && this.currentReport.recommendations) {
+          this.currentReport.recommendations.forEach(r => {
+            r.duplicates_to_delete = r.duplicates_to_delete.filter(d => !trashedSet.has(d.full_path));
+          });
+          this.renderClusters();
+        }
+
+        await this.loadTrashList();
+      } else {
+        alert("Server error: " + (data.error || "Could not move to trash"));
+      }
+    } catch (e) {
+      alert("Trash API request failed: " + e.message + "\nMake sure the local server is running (start_dashboard.bat).");
+    }
+  }
+
+  async loadTrashList() {
+    const listEl = document.getElementById('trashItemsList');
+    const badgeEl = document.getElementById('trashCountBadge');
+    if (!listEl) return;
+
+    try {
+      const res = await fetch('/api/trash');
+      const data = await res.json();
+      const items = data.items || [];
+
+      if (badgeEl) badgeEl.textContent = items.length;
+
+      if (items.length === 0) {
+        listEl.innerHTML = '<p class="drop-subtext" style="padding:1.5rem 0;">Smart Trash is currently empty. No files awaiting recovery.</p>';
+        return;
+      }
+
+      listEl.innerHTML = '';
+      items.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.className = 'file-row';
+        div.style.padding = '0.75rem 0.5rem';
+
+        const isUrgent = item.seconds_remaining < (24 * 3600); // Less than 1 day remaining
+
+        div.innerHTML = `
+          <div style="flex:1; margin-right:1rem;">
+            <div style="font-weight:700; color:var(--text-primary); font-size:0.95rem;">
+              ${item.display_name} 
+              <span style="font-weight:normal; color:var(--text-muted); font-size:0.8rem;">(${this.formatBytes(item.size_bytes)})</span>
+            </div>
+            <div style="font-family:var(--font-mono); font-size:0.75rem; color:#94a3b8; margin-top:0.2rem; word-break:break-all;">
+              Original: ${item.original_path}
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center; margin-top:0.4rem;">
+              <span class="timer-badge ${isUrgent ? 'urgent' : ''}">⏳ ${item.status}</span>
+              <span style="font-size:0.75rem; color:var(--text-muted);">Policy: ${item.retention_name}</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <button class="btn btn-emerald btn-restore" data-id="${item.id}" style="padding:0.4rem 0.8rem; font-size:0.8rem;">
+              ♻️ Restore
+            </button>
+            <button class="btn btn-rose btn-delete-perm" data-id="${item.id}" style="padding:0.4rem 0.8rem; font-size:0.8rem;">
+              ❌ Delete
+            </button>
+          </div>
+        `;
+
+        // Restore action
+        div.querySelector('.btn-restore').addEventListener('click', async () => {
+          await this.restoreTrashItem(item.id, item.display_name);
+        });
+
+        // Permanent Delete action
+        div.querySelector('.btn-delete-perm').addEventListener('click', async () => {
+          if (confirm(`Permanently delete "${item.display_name}"? This cannot be undone.`)) {
+            await this.deletePermanentTrashItem(item.id);
+          }
+        });
+
+        listEl.appendChild(div);
+      });
+    } catch (e) {
+      listEl.innerHTML = '<p class="drop-subtext">Could not connect to local server for Smart Trash. (Run start_dashboard.bat)</p>';
+    }
+  }
+
+  async restoreTrashItem(id, name) {
+    try {
+      const res = await fetch('/api/trash/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Restored "${name}" back to its original folder!`);
+        await this.loadTrashList();
+      } else {
+        alert("Restore failed: " + (data.error || "Unknown error"));
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  }
+
+  async deletePermanentTrashItem(id) {
+    try {
+      const res = await fetch('/api/trash/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        await this.loadTrashList();
+      }
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  }
+
+  async purgeExpiredTrash() {
+    try {
+      const res = await fetch('/api/trash/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      alert(`Purge completed! Removed ${data.purged_count || 0} expired files.`);
+      await this.loadTrashList();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  }
+
+  async emptyAllTrash() {
+    if (!confirm("Are you sure you want to permanently delete ALL files in Smart Trash?\nThis cannot be undone!")) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/trash/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true })
+      });
+      await res.json();
+      alert("Smart Trash has been completely emptied.");
+      await this.loadTrashList();
+    } catch (e) {
+      alert("Error: " + e.message);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // FIREBASE & EXPORT HELPERS
+  // ---------------------------------------------------------------------------
   async saveToFirebase() {
     if (!this.currentReport) return;
-    const res = await this.firebase.saveScanReport(this.currentReport);
+    await this.firebase.saveScanReport(this.currentReport);
     alert("Scan report successfully saved and synced to Firebase history!");
     this.renderHistory();
   }
@@ -315,7 +558,6 @@ class App {
   }
 
   loadSampleData() {
-    // Populate with a default demonstration snapshot
     const sample = {
       system: "Smart Storage Optimizer and Duplicate File Detection",
       version: "1.0.0",

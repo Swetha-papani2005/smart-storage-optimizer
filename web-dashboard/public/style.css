@@ -184,6 +184,42 @@ p.subtitle {
   filter: brightness(1.1);
 }
 
+.btn-rose {
+  background: linear-gradient(135deg, #e11d48, #f43f5e);
+  color: white;
+}
+
+.btn-rose:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.3);
+}
+
+.badge-count {
+  background: var(--accent-rose);
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 9999px;
+  margin-left: 0.35rem;
+  font-weight: 700;
+}
+
+.timer-badge {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.timer-badge.urgent {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-rose);
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
 /* Stats Grid */
 .stats-grid {
   display: grid;

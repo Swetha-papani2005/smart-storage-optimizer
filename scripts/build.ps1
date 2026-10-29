@@ -6,7 +6,7 @@ Write-Host "==========================================================" -Foregro
 $engineDir = "$PSScriptRoot\..\cpp-engine"
 Set-Location $engineDir
 
-$cmd = "g++ -std=c++17 -O2 -static -static-libgcc -static-libstdc++ -Iinclude src/sha256.cpp src/metadata_collector.cpp src/duplicate_detector.cpp src/waste_analyzer.cpp src/reporter.cpp src/main.cpp -o storage_optimizer.exe"
+$cmd = "g++ -std=c++17 -O2 -static -static-libgcc -static-libstdc++ -Iinclude src/sha256.cpp src/metadata_collector.cpp src/duplicate_detector.cpp src/waste_analyzer.cpp src/reporter.cpp src/trash_manager.cpp src/main.cpp -o storage_optimizer.exe"
 
 Write-Host "Executing: $cmd" -ForegroundColor Gray
 Invoke-Expression $cmd

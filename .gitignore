@@ -12,6 +12,7 @@ obj/
 # Test artifacts & generated reports
 test-sandbox/
 quarantine/
+smart_trash/
 storage_audit_report.json
 cleanup_duplicates.ps1
 cleanup_duplicates.bat
