@@ -153,7 +153,24 @@ Retention Rule  : KEEP_OLDEST
 
 ---
 
-## 🌐 Web Dashboard & Firebase Deployment
+## 🚀 Deploying to Render (Cloud Hosting)
+
+The project includes pre-configured `render.yaml` and dynamic cloud port support.
+
+1. **Push your code to GitHub** (see GitHub section below).
+2. Go to **[https://dashboard.render.com](https://dashboard.render.com)** and log in with your GitHub account.
+3. Click **"New +"** &rarr; Select **"Web Service"**.
+4. Choose your repository: `Swetha-papani2005/smart-storage-optimizer`.
+5. Render will automatically detect the settings from `render.yaml`:
+   * **Environment**: `Node`
+   * **Start Command**: `node web-dashboard/server.js`
+   * **Plan**: `Free`
+6. Click **"Create Web Service"**!
+7. Render will build and deploy your project, giving you a live public HTTPS URL (e.g., `https://smart-storage-optimizer.onrender.com`).
+
+---
+
+## 🌐 Web Dashboard & Localhost Testing
 
 The web dashboard provides an interactive UI for storage visualization and allows users to:
 1. **Drag-and-Drop folders/files directly into the browser** to run the 3-stage SHA-256 algorithm via the native browser Web Crypto API without installing software.
