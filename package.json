@@ -1,0 +1,18 @@
+{
+  "name": "smart-storage-optimizer",
+  "version": "1.0.0",
+  "description": "Smart Storage Optimization and Duplicate File Detection System with SHA-256 and Web Dashboard",
+  "main": "web-dashboard/server.js",
+  "scripts": {
+    "start": "node web-dashboard/server.js"
+  },
+  "keywords": [
+    "storage-optimizer",
+    "duplicate-detection",
+    "sha256",
+    "cpp",
+    "smart-trash"
+  ],
+  "author": "Swetha Papani",
+  "license": "MIT"
+}

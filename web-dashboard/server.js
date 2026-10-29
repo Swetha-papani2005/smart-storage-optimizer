@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const ROOT_DIR = path.join(__dirname, '..');
 const TRASH_DIR = path.join(ROOT_DIR, 'smart_trash');
