@@ -14,9 +14,6 @@ class App {
     this.bindEvents();
     this.renderHistory();
     this.loadTrashList();
-
-    // Load sample report initially if available
-    this.loadSampleData();
   }
 
   bindEvents() {
