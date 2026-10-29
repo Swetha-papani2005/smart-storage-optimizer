@@ -1,12 +1,14 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 
 const PORT = 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const ROOT_DIR = path.join(__dirname, '..');
 const TRASH_DIR = path.join(ROOT_DIR, 'smart_trash');
 const TRASH_MANIFEST = path.join(TRASH_DIR, 'trash_manifest.json');
+const CPP_ENGINE = path.join(ROOT_DIR, 'cpp-engine', 'storage_optimizer.exe');
 
 // Ensure trash folder exists
 if (!fs.existsSync(TRASH_DIR)) {
@@ -78,6 +80,59 @@ function purgeExpiredTrash() {
 purgeExpiredTrash();
 setInterval(purgeExpiredTrash, 60 * 60 * 1000);
 
+/**
+ * Smart Path Resolver:
+ * Maps browser-relative paths (e.g. "nami/nami 1.pptx") to their true absolute location on Windows.
+ */
+function resolveRealPath(rawPath) {
+  if (!rawPath) return null;
+  // If absolute and exists
+  if (path.isAbsolute(rawPath) && fs.existsSync(rawPath)) {
+    return rawPath;
+  }
+
+  const userProfile = process.env.USERPROFILE || 'C:\\Users\\DELL';
+  const desktopDir = path.join(userProfile, 'Desktop');
+  const downloadsDir = path.join(userProfile, 'Downloads');
+  const documentsDir = path.join(userProfile, 'Documents');
+
+  const candidates = [
+    rawPath,
+    path.join(desktopDir, rawPath),
+    path.join(downloadsDir, rawPath),
+    path.join(documentsDir, rawPath),
+    path.join(userProfile, rawPath),
+    path.join(ROOT_DIR, rawPath),
+    path.join(process.cwd(), rawPath)
+  ];
+
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      return path.resolve(c);
+    }
+  }
+
+  // Handle slash differences
+  const normalized = rawPath.replace(/\\/g, '/');
+  const parts = normalized.split('/');
+  if (parts.length > 0) {
+    const topFolder = parts[0];
+    const subPath = parts.slice(1).join(path.sep);
+
+    for (const base of [desktopDir, downloadsDir, documentsDir, userProfile]) {
+      const folderCandidate = path.join(base, topFolder);
+      if (fs.existsSync(folderCandidate)) {
+        const fullCandidate = subPath ? path.join(folderCandidate, subPath) : folderCandidate;
+        if (fs.existsSync(fullCandidate)) {
+          return path.resolve(fullCandidate);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=UTF-8',
   '.css': 'text/css; charset=UTF-8',
@@ -125,6 +180,50 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith('/api/')) {
     res.setHeader('Content-Type', 'application/json');
 
+    // 0. POST /api/scan-native (Trigger C++ Engine Scan from UI)
+    if (req.method === 'POST' && pathname === '/api/scan-native') {
+      try {
+        const body = await readBodyJson(req);
+        let folderPath = body.folderPath || '';
+        const strategy = body.strategy || 'KEEP_OLDEST';
+
+        if (!folderPath) {
+          folderPath = path.join(process.env.USERPROFILE || 'C:\\Users\\DELL', 'Desktop');
+        }
+
+        // Check if path exists
+        if (!fs.existsSync(folderPath)) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: `Directory does not exist: ${folderPath}` }));
+          return;
+        }
+
+        const reportPath = path.join(PUBLIC_DIR, 'storage_audit_report.json');
+        const args = ['-s', folderPath, '--strategy', strategy, '-j', reportPath];
+
+        execFile(CPP_ENGINE, args, (err, stdout, stderr) => {
+          if (err && !fs.existsSync(reportPath)) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'C++ Scan execution failed: ' + (stderr || err.message) }));
+            return;
+          }
+
+          try {
+            const reportData = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            res.writeHead(200);
+            res.end(JSON.stringify({ success: true, report: reportData }));
+          } catch (readErr) {
+            res.writeHead(500);
+            res.end(JSON.stringify({ error: 'Failed to read generated report: ' + readErr.message }));
+          }
+        });
+      } catch (err) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
     // 1. GET /api/trash
     if (req.method === 'GET' && pathname === '/api/trash') {
       const manifest = loadTrashManifest();
@@ -139,7 +238,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // 2. POST /api/trash (Move files to Smart Trash)
+    // 2. POST /api/trash (Move files to Smart Trash with Smart Path Resolution)
     if (req.method === 'POST' && pathname === '/api/trash') {
       try {
         const body = await readBodyJson(req);
@@ -157,21 +256,34 @@ const server = http.createServer(async (req, res) => {
           : (retention && retention.toLowerCase().includes('week')) ? '1 Week' : '1 Month';
 
         const movedItems = [];
-        for (const filePath of filePaths) {
-          if (!fs.existsSync(filePath)) continue;
+        const failedPaths = [];
 
-          const stats = fs.statSync(filePath);
-          const ext = path.extname(filePath);
-          const basename = path.basename(filePath);
+        for (const rawPath of filePaths) {
+          const resolvedPath = resolveRealPath(rawPath);
+          if (!resolvedPath || !fs.existsSync(resolvedPath)) {
+            console.warn(`Could not resolve real path on disk for: ${rawPath}`);
+            failedPaths.push(rawPath);
+            continue;
+          }
+
+          const stats = fs.statSync(resolvedPath);
+          const ext = path.extname(resolvedPath);
+          const basename = path.basename(resolvedPath);
           const itemId = 'trash_' + now + '_' + Math.random().toString(36).substring(2, 8);
           const trashFilename = itemId + ext;
           const destPath = path.join(TRASH_DIR, trashFilename);
 
-          fs.renameSync(filePath, destPath);
+          try {
+            fs.renameSync(resolvedPath, destPath);
+          } catch (renameErr) {
+            // Cross-device fallback
+            fs.copyFileSync(resolvedPath, destPath);
+            fs.unlinkSync(resolvedPath);
+          }
 
           const item = {
             id: itemId,
-            original_path: path.resolve(filePath),
+            original_path: path.resolve(resolvedPath),
             trash_filename: trashFilename,
             display_name: basename,
             size_bytes: stats.size,
@@ -182,14 +294,25 @@ const server = http.createServer(async (req, res) => {
 
           manifest.items.push(item);
           movedItems.push(item);
+          console.log(`[TRASHED] Moved to Smart Trash: ${resolvedPath} -> ${trashFilename}`);
         }
 
         saveTrashManifest(manifest);
+
+        if (movedItems.length === 0 && failedPaths.length > 0) {
+          res.writeHead(404);
+          res.end(JSON.stringify({
+            error: `Could not locate file on disk: "${failedPaths[0]}". Please run scan using the C++ scan input bar or specify full path.`,
+            failed_paths: failedPaths
+          }));
+          return;
+        }
 
         res.writeHead(200);
         res.end(JSON.stringify({
           success: true,
           moved_count: movedItems.length,
+          failed_count: failedPaths.length,
           retention: retentionName,
           items: movedItems
         }));
@@ -227,7 +350,13 @@ const server = http.createServer(async (req, res) => {
           fs.mkdirSync(parentDir, { recursive: true });
         }
 
-        fs.renameSync(srcPath, item.original_path);
+        try {
+          fs.renameSync(srcPath, item.original_path);
+        } catch {
+          fs.copyFileSync(srcPath, item.original_path);
+          fs.unlinkSync(srcPath);
+        }
+
         manifest.items.splice(idx, 1);
         saveTrashManifest(manifest);
 
@@ -250,7 +379,9 @@ const server = http.createServer(async (req, res) => {
         if (body.all) {
           for (const item of manifest.items) {
             const fpath = path.join(TRASH_DIR, item.trash_filename);
-            if (fs.existsSync(fpath)) fs.unlinkSync(fpath);
+            if (fs.existsSync(fpath)) {
+              try { fs.unlinkSync(fpath); } catch (e) {}
+            }
           }
           manifest.items = [];
           saveTrashManifest(manifest);
@@ -269,7 +400,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // 5. DELETE /api/trash (Delete single item permanently)
+    // 5. POST /api/trash/delete (Delete single item permanently)
     if (req.method === 'POST' && pathname === '/api/trash/delete') {
       try {
         const body = await readBodyJson(req);
@@ -280,7 +411,9 @@ const server = http.createServer(async (req, res) => {
         if (idx !== -1) {
           const item = manifest.items[idx];
           const fpath = path.join(TRASH_DIR, item.trash_filename);
-          if (fs.existsSync(fpath)) fs.unlinkSync(fpath);
+          if (fs.existsSync(fpath)) {
+            try { fs.unlinkSync(fpath); } catch (e) {}
+          }
           manifest.items.splice(idx, 1);
           saveTrashManifest(manifest);
         }
@@ -332,6 +465,5 @@ server.listen(PORT, () => {
   console.log('======================================================================');
   console.log(`  Localhost Server Running at: http://localhost:${PORT}`);
   console.log(`  Smart Trash Directory:       ${TRASH_DIR}`);
-  console.log('  Press Ctrl+C to stop the server.');
   console.log('======================================================================');
 });

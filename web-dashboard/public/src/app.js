@@ -108,6 +108,52 @@ class App {
     trashAllBtn.addEventListener('click', () => this.trashAllRecommended());
     purgeExpiredBtn.addEventListener('click', () => this.purgeExpiredTrash());
     emptyTrashBtn.addEventListener('click', () => this.emptyAllTrash());
+
+    // Direct C++ scan button
+    const btnRunNativeScan = document.getElementById('btnRunNativeScan');
+    const directPathInput = document.getElementById('directPathInput');
+    if (btnRunNativeScan && directPathInput) {
+      btnRunNativeScan.addEventListener('click', async () => {
+        const folder = directPathInput.value.trim();
+        if (!folder) {
+          alert("Please enter a folder path (e.g. C:\\Users\\DELL\\Desktop\\nami)");
+          return;
+        }
+        await this.runNativeScan(folder);
+      });
+      directPathInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+          const folder = directPathInput.value.trim();
+          if (folder) await this.runNativeScan(folder);
+        }
+      });
+    }
+  }
+
+  async runNativeScan(folderPath) {
+    const progressBox = document.getElementById('progressBox');
+    const progressText = document.getElementById('progressText');
+    progressBox.style.display = 'block';
+    progressText.textContent = `⚡ Running C++ Core Engine on: ${folderPath}...`;
+
+    try {
+      const res = await fetch('/api/scan-native', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath, strategy: this.currentStrategy })
+      });
+      const data = await res.json();
+      progressBox.style.display = 'none';
+
+      if (data.success && data.report) {
+        this.setReport(data.report);
+      } else {
+        alert("Scan error: " + (data.error || "Failed to scan directory"));
+      }
+    } catch (e) {
+      progressBox.style.display = 'none';
+      alert("Error: " + e.message);
+    }
   }
 
   async processFiles(fileList) {
@@ -321,10 +367,14 @@ class App {
 
       const data = await res.json();
       if (data.success) {
+        if (data.moved_count === 0) {
+          alert("Notice: No matching files were found on disk to move.\n\nTip: Use the '⚡ Run C++ Scan' box with your full folder path (e.g. C:\\Users\\DELL\\Desktop\\nami) for 100% direct file access!");
+          return;
+        }
         alert(`Success! Moved ${data.moved_count} file(s) to Smart Trash.\nRetention Timer: ${data.retention} before auto-purge.`);
         
         // Remove trashed paths from current report view
-        const trashedSet = new Set(filePaths);
+        const trashedSet = new Set((data.items || []).map(x => x.original_path).concat(filePaths));
         if (this.currentReport && this.currentReport.recommendations) {
           this.currentReport.recommendations.forEach(r => {
             r.duplicates_to_delete = r.duplicates_to_delete.filter(d => !trashedSet.has(d.full_path));
